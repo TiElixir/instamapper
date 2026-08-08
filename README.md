@@ -1,166 +1,342 @@
-# InstaRL — Instagram Relationship Graph OSINT Scaffold
+# InstaRL
 
-InstaRL is a local-first scaffold for collecting and visualising relationship graphs from an authenticated Instagram session. Its main purpose is to build a durable SQLite database of users and directed relationships, preserve scan history, and explore the resulting graph in a React frontend.
+> Local-first Instagram relationship graph collector and explorer.
 
-> **Responsible use:** only collect data your authenticated session is authorized to view. Do not automate login, store credentials, bypass access controls, or scrape private/unavailable content. Instagram UI and terms can change; review applicable policies before use.
+InstaRL turns explicit Instagram **Following** observations into a searchable relationship graph. It pairs a local Chrome extension collector with a FastAPI + SQLite backend and a React/Cytoscape frontend, so you can capture relationships from an authenticated browser session, preserve scan history, and explore the resulting network visually.
+
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111%2B-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Chrome Extension](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)
+
+## Responsible use
+
+Use InstaRL only with accounts, sessions, and data you are authorized to access. The project is designed for local, defensive, educational, and OSINT-style analysis of relationship data visible to your own authenticated Instagram session.
+
+Do not use it to bypass access controls, automate login, harvest private content, evade platform restrictions, or collect data in violation of applicable laws, policies, or terms of service. Instagram can rate limit, challenge, or change UI/API behavior at any time.
+
+## What it does
+
+- Captures Instagram Following relationships from a real logged-in Chrome tab.
+- Stores normalized users and directed `A follows B` edges in local SQLite.
+- Preserves scan sessions, checkpoints, edge snapshots, and recoverable errors.
+- Supports depth-based expansion where discovered users can become the next queue level.
+- Uses both network response parsing and DOM scraping so visible rows can still be ingested when one source fails.
+- Displays the graph in a polished React frontend with search, filters, dark mode, scan history, exports, and node details.
+- Highlights search hits plus their 1-hop neighbors for easier graph navigation.
+- Exports the current graph as JSON or CSV.
 
 ## Architecture
 
 ```text
-Logged-in Chrome tab + InstaRL extension
-                  ↓
-        Following response capture
-                  ↓
-       FastAPI → SQLite snapshots
-                  ↓
-        React + Cytoscape frontend
+┌─────────────────────────────────────────────────────────────┐
+│ Logged-in Chrome tab on instagram.com                       │
+│  └─ InstaRL Manifest V3 extension                           │
+│     ├─ opens profile Following lists                        │
+│     ├─ captures Following network responses                 │
+│     └─ scrapes visible Following dialog/profile links        │
+└───────────────────────────────┬─────────────────────────────┘
+                                │ normalized usernames + edges
+                                ▼
+┌─────────────────────────────────────────────────────────────┐
+│ FastAPI backend                                              │
+│  ├─ extension ingest endpoints                              │
+│  ├─ scan lifecycle + checkpoint state                       │
+│  ├─ SQLite persistence                                      │
+│  └─ graph/export APIs                                       │
+└───────────────────────────────┬─────────────────────────────┘
+                                │ graph JSON
+                                ▼
+┌─────────────────────────────────────────────────────────────┐
+│ React + TypeScript frontend                                 │
+│  └─ Cytoscape graph explorer                                │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Backend
+## Repository layout
 
-- Python 3.12+ package under `backend/app/`
-- FastAPI + SQLAlchemy + SQLite
-- Chrome Manifest V3 extension using the authenticated browser tab
-- Network response capture is restricted to explicit Following-list activity
-- Versioned relationship snapshots so historical scans are not lost
-- JSON/CSV export endpoints
-- Structured JSON logs for scan/error/skip events
+```text
+.
+├── backend/              # FastAPI app, SQLite models, APIs, tests
+├── config/               # Local scan/database configuration
+├── data/                 # Local SQLite databases (gitignored)
+├── extension/            # Chrome Manifest V3 collector
+├── frontend/             # Vite + React + TypeScript graph UI
+├── Makefile              # Common install/dev/test/build commands
+└── README.md
+```
 
-### Frontend
+## Requirements
 
-- Vite + React + TypeScript under `frontend/`
-- Cytoscape.js graph with searchable nodes, follower-based node sizing, verified borders, private opacity, status shapes, relationship arrows, scan history, filters, and dark mode
+- Python 3.12+
+- Node.js and npm
+- Google Chrome or Chromium
+- An Instagram account/session that can view the profiles you intend to inspect
 
 ## Quickstart
 
-### 1. Backend environment
+### 1. Install dependencies
+
+From the repository root:
 
 ```bash
+make install
+```
+
+Or install each side manually:
+
+```bash
+# Backend
 cd backend
 python3 -m venv .venv
-.venv/bin/python -m pip install -e ".[dev]"
-```
+.venv/bin/pip install -e ".[dev]"
 
-Configure scan behaviour in `config/config.yaml`. The default database is `data/instarl.db`.
-
-Start the API:
-
-```bash
-cd backend
-.venv/bin/python run.py
-```
-
-API docs: `http://127.0.0.1:8000/docs`
-
-### 2. Frontend
-
-```bash
-cd frontend
+# Frontend
+cd ../frontend
 npm install
-npm run dev
 ```
 
-Open `http://127.0.0.1:5173`.
+### 2. Start the app
 
-The Vite dev server proxies `/api/*` to `http://127.0.0.1:8000/*`. For another API location, set `VITE_API_URL`.
-
-## Frontend Usage
-
-Start the backend before opening the frontend. The frontend reads graph and scan data from the FastAPI server; it does not contain a separate database.
+Run both servers in the background:
 
 ```bash
-# Terminal 1 — API
-cd backend
-.venv/bin/python run.py
-
-# Terminal 2 — frontend
-cd frontend
-npm run dev
+make dev
 ```
 
-Open `http://127.0.0.1:5173` in a browser.
+This starts:
 
-### Build the database with the browser extension
+- Backend API: `http://127.0.0.1:8000`
+- API docs: `http://127.0.0.1:8000/docs`
+- Frontend: `http://127.0.0.1:5173`
 
-1. Load `extension/` as an unpacked extension from `chrome://extensions` with Developer mode enabled.
-2. Open Instagram in Chrome and confirm that the session is logged in.
-3. Open the InstaRL extension popup and enter the API URL, starting username, and depth.
-4. Click **Start capture**. The extension uses the active Instagram tab and captures only Following-list response traffic.
-5. Open each requested profile's **Following** list when the extension navigates there. At depth `2`, it queues the discovered accounts for the next level.
-6. Watch **Scan History** for progress, users discovered, edges recorded, and recoverable errors.
+Stop background servers with:
 
-The extension writes users and relationships incrementally. Private, unavailable, or inaccessible accounts are recorded as errors instead of creating guessed edges. Cookies, headers, passwords, and raw response bodies are never sent to the backend.
+```bash
+make stop
+```
 
-### Explore the graph
+You can also run them separately:
 
-1. Open the **Graph** tab after a scan has stored data.
-2. Search for a username with **Search nodes**. Matching nodes are highlighted and the view zooms toward them.
-3. Click a node to view its stored profile details in the right sidebar.
-4. Use the sidebar filters to show only verified accounts, hide private accounts, or set a minimum follower count.
-5. Use the relationship toggle to include reverse relationship observations when those records exist.
-6. Use the **JSON** or **CSV** buttons to export the currently stored graph.
-7. Use the moon/sun button in the header to switch dark mode. The preference is saved locally in the browser.
+```bash
+make backend
+make frontend
+```
 
-### What the graph means
+## Configuration
 
-- Each circle/shape is a stored Instagram account.
-- Node size is based on the latest follower count in the database.
-- An arrow from `A` to `B` means the scan observed that `A` follows `B`.
-- Verified accounts have a blue border.
-- Private accounts are shown with reduced opacity unless hidden by a filter.
-- A diamond indicates an unavailable account state.
+Default scan settings live in [config/config.yaml](config/config.yaml):
 
-If the graph is empty, check that the API is running, that the extension is attached to the correct Instagram tab, and that the scan completed. Reload the page after a completed scan if the graph was already open.
+```yaml
+database_path: ../data/instarl.db
+scan_defaults:
+  depth: 1
+  resume: true
+collector:
+  max_following_rows: 500
+  scan_timeout_seconds: 180
+```
 
-## Browser extension permissions
+The default database is stored at [data/instarl.db](data/instarl.db). Local databases, cookies, logs, PID files, caches, and build artifacts are ignored by Git.
 
-The extension requires the Chrome `debugger` permission because Chrome's normal request observer does not expose response bodies. It is restricted by its manifest to Instagram and the local API. Keep it installed locally, disable it when not collecting, and never distribute a build with additional host permissions.
+## Chrome extension setup
+
+The extension is the recommended collector because it uses your already-authenticated browser tab instead of automating login.
+
+1. Start the backend: `make backend` or `make dev`.
+2. Open `chrome://extensions` in Chrome.
+3. Enable **Developer mode**.
+4. Click **Load unpacked**.
+5. Select the [extension/](extension/) folder.
+6. Open Instagram in Chrome and confirm you are logged in.
+7. Open the InstaRL extension popup.
+8. Enter:
+   - API URL: `http://127.0.0.1:8000`
+   - Starting username
+   - Scan depth
+9. Click **Start capture**.
+
+The extension will navigate through queued profiles, open each profile's **Following** list, scroll it, capture discovered users, and send normalized relationship batches to the backend.
+
+After changing extension code, always reload the unpacked extension from `chrome://extensions` and hard-refresh the Instagram tab. Old service workers can stay alive and make it look like fixes did not apply.
+
+## How collection works
+
+For every profile being scanned, InstaRL records edges from the **current source account** to the accounts found in that source account's Following list.
+
+Example:
+
+```text
+A follows B
+B follows C
+C follows D
+```
+
+The graph stores:
+
+```text
+A → B
+B → C
+C → D
+```
+
+It does **not** flatten deeper discoveries into direct edges from the original target.
+
+The browser collector uses two independent capture sources:
+
+1. **Network capture** — the Chrome `debugger` API reads relevant Instagram Following/GraphQL response bodies during explicit Following-list activity.
+2. **DOM capture** — the content script scrapes visible profile links from the Following UI while it scrolls.
+
+Either source can contribute users. The backend receives only normalized usernames/IDs and relationship edges; cookies, passwords, headers, and raw response bodies are not sent to the API.
+
+## Using the graph explorer
+
+Open `http://127.0.0.1:5173` after starting the backend and frontend.
+
+The UI lets you:
+
+- View scan progress and history.
+- Search usernames in the graph.
+- Highlight matching nodes and their 1st-degree neighbors.
+- Click a node to inspect stored profile details.
+- Filter by verified status, private status, follower count, depth, and relationship direction.
+- Toggle dark mode.
+- Export graph data as JSON or CSV.
+
+Graph semantics:
+
+- Each node is an Instagram account stored in SQLite.
+- Each directed edge `A → B` means InstaRL observed `A` following `B`.
+- Node size reflects the latest stored follower count when available.
+- Verified accounts use a stronger visual border.
+- Private/unavailable accounts are visually distinguished and can be filtered.
 
 ## API highlights
 
-- `POST /extension/scans` — start an extension-driven scan
-- `POST /extension/scans/{id}/accounts` — ingest one explicit Following-list observation
-- `POST /extension/scans/{id}/finish` — finish an extension scan
-- `GET /scans` and `GET /scans/{id}` — scan history, progress, errors, and counts
-- `GET /users` and `GET /users/{username}` — current profile records
-- `GET /users/{username}/snapshots` — immutable profile history
-- `GET /graph` — graph data with `verified_only`, `hide_private`, `min_followers`, `depth`, and relationship filters
-- `GET /exports/json` and `GET /exports/csv` — current graph exports
+Extension-driven scan endpoints:
 
-Example scan request:
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/extension/scans` | Start a browser-extension scan |
+| `GET` | `/extension/scans/pending` | List active extension scans |
+| `POST` | `/extension/scans/{id}/accounts` | Ingest one source account's Following observations |
+| `POST` | `/extension/scans/{id}/finish` | Mark an extension scan completed, failed, or cancelled |
+
+Graph/data endpoints:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/scans` | Scan history |
+| `GET` | `/scans/{id}` | Scan details, counts, and errors |
+| `GET` | `/users` | Stored users |
+| `GET` | `/users/{username}` | User detail |
+| `GET` | `/users/{username}/snapshots` | Historical snapshots for a user |
+| `GET` | `/graph` | Graph nodes and edges |
+| `GET` | `/exports/json` | JSON export |
+| `GET` | `/exports/csv` | CSV export |
+
+Example extension scan request:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/scans \
+curl -X POST http://127.0.0.1:8000/extension/scans \
   -H 'Content-Type: application/json' \
   -d '{"target":"example_user","depth":1}'
 ```
 
-## Tests and builds
+## Testing
+
+Run everything:
+
+```bash
+make test
+```
+
+Run backend tests only:
 
 ```bash
 cd backend
-.venv/bin/python -m pytest
-
-cd ../frontend
-npm test
-npm run build
+.venv/bin/pytest
 ```
 
-The scaffold includes backend unit/API/collector tests and frontend formatter/app tests. Real Instagram collection requires Chrome, the locally loaded extension, and a valid authenticated Instagram session.
+Run frontend tests only:
 
-## Data model
+```bash
+cd frontend
+npm test -- --run
+```
 
-SQLite tables:
+Build the frontend:
 
-- `users` — stable current identity and lookup fields
-- `user_snapshots` — immutable profile values per scan
-- `edges` — stable directed relationship records
-- `edge_snapshots` — immutable relationship observations per scan
-- `scan_sessions` — lifecycle, progress, checkpoint, and error summary
-- `scan_errors` — structured recoverable errors by account/session
+```bash
+make build
+```
 
-Username changes are reconciled by Instagram ID when available; otherwise the canonical username is used.
+## Troubleshooting
 
-## Extension points
+### Following list is blank in Instagram
 
-Neo4j, scheduled rescans, GraphML/GEXF export, richer relationship types, and richer extension status reporting remain extension points.
+If the Following list is visually blank even with the extension disabled, the issue is likely Instagram-side: a soft rate limit, challenge/checkpoint, session restriction, or temporary UI/API behavior. Pause collection, use Instagram normally, and try again later.
+
+A `302` response when requesting a Following route can indicate a redirect to login, challenge, checkpoint, or another restriction page. Inspect the `Location` header to confirm the destination.
+
+### Capture scrolls but records zero users
+
+- Reload the unpacked extension from `chrome://extensions`.
+- Hard-refresh the Instagram tab.
+- Confirm the popup is attached to the correct tab.
+- Confirm the backend is running at the configured API URL.
+- Watch the popup status for DOM capture counts such as `via DOM`.
+- Inspect the extension service worker console for response parsing errors.
+
+### Extension opens the wrong control
+
+Instagram profiles can show a relationship button labeled **Following** when you already follow the account. InstaRL attempts to distinguish that CTA from the actual profile Following count/list control. If Instagram changes the DOM again, reload the extension, hard-refresh Instagram, and open the list manually once before retrying capture.
+
+### API or frontend will not start
+
+- Check whether the ports are already in use: backend `8000`, frontend `5173`.
+- Stop background processes with `make stop`.
+- Reinstall dependencies with `make install`.
+- Check logs in `.pids/backend.log` and `.pids/frontend.log` when using `make dev`.
+
+## Data and Git safety
+
+The project is intended to keep sensitive and generated local files out of Git. The current ignore rules cover:
+
+- SQLite databases: `data/*.db`, `data/*.db-*`
+- Local cookie files: `config/cookies.yaml`, `config/cookies.json`, `config/cookies.local.*`
+- Logs and PID files: `*.log`, `.pids/`
+- Python caches and virtual environments
+- Node dependencies and build output
+- Playwright reports/artifacts
+
+Before pushing public changes, still run:
+
+```bash
+git status --short
+git diff --cached
+```
+
+Make sure no personal data, cookies, database snapshots, screenshots, or logs were intentionally added.
+
+## Notes and limitations
+
+- InstaRL is local-first and stores data in SQLite by default.
+- Instagram UI/API behavior changes frequently; collector selectors and parsers may require maintenance.
+- Rate limits or account challenges are external to the app and cannot be solved by code alone.
+- The Chrome `debugger` permission is required to access response bodies; keep the extension local and disable it when not collecting.
+- Legacy Playwright-style collection code exists, but the browser extension flow is the primary collection path.
+
+## Roadmap ideas
+
+- Neo4j export or optional graph database backend
+- GraphML/GEXF export
+- Scheduled rescans and diff views
+- Richer relationship types
+- Better extension telemetry and resumable capture UX
+- Packaged desktop/local installer
+
+## License
+
+No license file is currently included. Add one before publishing if you want others to use, modify, or redistribute the project.
