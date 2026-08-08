@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "InstaRL Relationship Collector",
+  "version": "0.2.0",
+  "description": "Collects explicit Instagram following relationships from the active authenticated browser tab.",
+  "permissions": ["debugger", "storage", "tabs", "scripting"],
+  "host_permissions": ["https://www.instagram.com/*", "http://127.0.0.1:8000/*", "http://localhost:8000/*"],
+  "background": { "service_worker": "service_worker.js", "type": "module" },
+  "action": { "default_popup": "popup.html" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

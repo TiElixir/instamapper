@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Data
+data/*.db
+data/*.db-*
+config/cookies.yaml
+config/cookies.json
+config/cookies.local.*
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Playwright
+backend/test-results/
+playwright-report/
+
+# Misc
+.DS_Store
+*.log
+.pids/

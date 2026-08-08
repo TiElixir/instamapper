@@ -1,0 +1,21 @@
+# Export your authenticated Instagram session cookies and save this file as
+# `config/cookies.yaml` (gitignored). A common source is a browser extension
+# that exports cookies as JSON; both YAML and JSON lists are accepted here.
+# Only session cookies are used - credentials are never read or stored.
+cookies:
+  - name: sessionid
+    value: "REPLACE_WITH_YOUR_SESSIONID"
+    domain: ".instagram.com"
+    path: "/"
+    secure: true
+    httpOnly: true
+  - name: csrftoken
+    value: "REPLACE_WITH_CSRF_TOKEN"
+    domain: ".instagram.com"
+    path: "/"
+    secure: true
+  - name: ig_did
+    value: "REPLACE_WITH_IG_DID"
+    domain: ".instagram.com"
+    path: "/"
+    secure: true
