@@ -55,6 +55,18 @@ body {
   position: absolute; top: 12px; left: 12px; z-index: 10;
   display: flex; align-items: center; gap: 4px;
 }
+.graph-import-bar {
+  position: absolute; top: 12px; right: 12px; z-index: 10;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  font-size: .8rem; color: var(--fg-muted);
+}
+.graph-import-bar button {
+  padding: 5px 10px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--bg-secondary); color: var(--fg); cursor: pointer; font-size: .8rem;
+}
+.graph-import-bar button:hover { background: var(--accent); color: #fff; }
 .search-bar input {
   padding: 7px 12px; border-radius: var(--radius); border: 1px solid var(--border);
   background: var(--bg-secondary); color: var(--fg); width: 220px; font-size: .85rem;

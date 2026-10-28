@@ -6,9 +6,17 @@
   <p class="hint">Use your logged-in Instagram tab. No cookies leave the browser.</p>
   <label>API URL<input id="api" value="http://127.0.0.1:8000"></label>
   <label>Start username<input id="target" placeholder="yash.vardhan.rai"></label>
+  <label>Scan mode
+    <select id="mode">
+      <option value="following">Following</option>
+      <option value="followers">Followers</option>
+    </select>
+  </label>
   <label>Depth<input id="depth" type="number" min="1" max="3" value="1"></label>
+  <label>Skip if following count is over<input id="max-following" type="number" min="1" placeholder="no limit"></label>
   <div class="buttons"><button id="start">Start capture</button><button id="stop" class="secondary">Stop</button></div>
-  <button id="capture" class="secondary full">Capture current Following traffic</button>
+  <button id="skip" class="secondary full">Skip current user</button>
+  <button id="capture" class="secondary full">Capture current list</button>
   <p id="status">Idle</p>
   <script src="popup.js"></script>
 </body>

@@ -2,7 +2,7 @@
 
 > Local-first Instagram relationship graph collector and explorer.
 
-InstaRL turns explicit Instagram **Following** observations into a searchable relationship graph. It pairs a local Chrome extension collector with a FastAPI + SQLite backend and a React/Cytoscape frontend, so you can capture relationships from an authenticated browser session, preserve scan history, and explore the resulting network visually.
+InstaRL turns explicit Instagram **Following** and **Followers** observations into a searchable relationship graph. It pairs a local Chrome extension collector with a FastAPI + SQLite backend, a React/Cytoscape frontend, and an optional native C++ OpenGL viewer for large graphs, so you can capture relationships from an authenticated browser session, preserve scan history, and explore the resulting network visually.
 
 ![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.111%2B-009688?logo=fastapi&logoColor=white)
@@ -18,12 +18,15 @@ Do not use it to bypass access controls, automate login, harvest private content
 
 ## What it does
 
-- Captures Instagram Following relationships from a real logged-in Chrome tab.
+- Captures Instagram Following and Followers relationships from a real logged-in Chrome tab.
 - Stores normalized users and directed `A follows B` edges in local SQLite.
 - Preserves scan sessions, checkpoints, edge snapshots, and recoverable errors.
 - Supports depth-based expansion where discovered users can become the next queue level.
-- Uses both network response parsing and DOM scraping so visible rows can still be ingested when one source fails.
+- Can skip the current scan user from the extension popup.
+- Can skip deeper queued users whose profile-level Following count is above a configured threshold.
+- Uses Instagram's authenticated relationship APIs first, with DOM/dialog capture as a fallback.
 - Displays the graph in a polished React frontend with search, filters, dark mode, scan history, exports, and node details.
+- Includes an optional native C++ OpenGL graph viewer for larger 10k+ node / 15k+ edge exports.
 - Highlights search hits plus their 1-hop neighbors for easier graph navigation.
 - Exports the current graph as JSON or CSV.
 
@@ -63,6 +66,7 @@ Do not use it to bypass access controls, automate login, harvest private content
 ├── data/                 # Local SQLite databases (gitignored)
 ├── extension/            # Chrome Manifest V3 collector
 ├── frontend/             # Vite + React + TypeScript graph UI
+├── viewer/               # Native C++ OpenGL graph viewer
 ├── Makefile              # Common install/dev/test/build commands
 └── README.md
 ```
@@ -72,6 +76,7 @@ Do not use it to bypass access controls, automate login, harvest private content
 - Python 3.12+
 - Node.js and npm
 - Google Chrome or Chromium
+- CMake, a C++20 compiler, and OpenGL development libraries for the optional native viewer
 - An Instagram account/session that can view the profiles you intend to inspect
 
 ## Quickstart
@@ -155,15 +160,19 @@ The extension is the recommended collector because it uses your already-authenti
    - API URL: `http://127.0.0.1:8000`
    - Starting username
    - Scan depth
+   - Scan mode: **Following** or **Followers**
+   - Optional max-Following threshold for deeper queued users
 9. Click **Start capture**.
 
-The extension will navigate through queued profiles, open each profile's **Following** list, scroll it, capture discovered users, and send normalized relationship batches to the backend.
+The extension will navigate through queued profiles, capture the selected relationship mode, and send normalized relationship batches to the backend. Use **Skip current user** to abandon the currently open scan target and continue with the next queued account.
 
 After changing extension code, always reload the unpacked extension from `chrome://extensions` and hard-refresh the Instagram tab. Old service workers can stay alive and make it look like fixes did not apply.
 
 ## How collection works
 
-For every profile being scanned, InstaRL records edges from the **current source account** to the accounts found in that source account's Following list.
+For every profile being scanned in **Following** mode, InstaRL records edges from the **current source account** to the accounts found in that source account's Following list. In **Followers** mode, users listed as followers are recorded as reverse canonical follows edges: if `B` appears in `A`'s Followers list, the stored edge is `B → A`.
+
+When a max-Following threshold is configured, the extension minimizes Instagram API requests by using counts already present in relationship API results first. It only requests profile-level counts for queued users that are about to be scanned and are missing a usable `following_count`; those per-scan lookups are cached in the service worker. No cookies, headers, or raw Instagram response bodies are sent to the backend.
 
 Example:
 
@@ -183,12 +192,12 @@ C → D
 
 It does **not** flatten deeper discoveries into direct edges from the original target.
 
-The browser collector uses two independent capture sources:
+The browser collector only records immediate users observed in the current source account's selected relationship list:
 
-1. **Network capture** — the Chrome `debugger` API reads relevant Instagram Following/GraphQL response bodies during explicit Following-list activity.
-2. **DOM capture** — the content script scrapes visible profile links from the Following UI while it scrolls.
+1. **Relationship API capture** — the Chrome `debugger` API only accepts the active `/api/v1/friendships/{id}/following/` or `/api/v1/friendships/{id}/followers/` response and only parses its direct `users`/`items` list.
+2. **DOM capture** — the content script scrapes visible profile links from the currently opened relationship UI while it scrolls.
 
-Either source can contribute users. The backend receives only normalized usernames/IDs and relationship edges; cookies, passwords, headers, and raw response bodies are not sent to the API.
+GraphQL, profile, feed, recommendation, suggestion, and unrelated Instagram API responses are not allowed to create edges. The backend receives only normalized usernames/IDs and relationship edges; cookies, passwords, headers, and raw response bodies are not sent to the API.
 
 ## Using the graph explorer
 
@@ -197,6 +206,7 @@ Open `http://127.0.0.1:5173` after starting the backend and frontend.
 The UI lets you:
 
 - View scan progress and history.
+- Import a local graph JSON export directly into the viewer.
 - Search usernames in the graph.
 - Highlight matching nodes and their 1st-degree neighbors.
 - Click a node to inspect stored profile details.
@@ -211,6 +221,47 @@ Graph semantics:
 - Node size reflects the latest stored follower count when available.
 - Verified accounts use a stronger visual border.
 - Private/unavailable accounts are visually distinguished and can be filtered.
+
+## Native graph viewer
+
+The React/Cytoscape viewer remains the easiest way to inspect small and medium graphs from the browser. For larger exports, InstaRL also includes a separate native C++ OpenGL viewer designed around batched drawing and incremental force simulation.
+
+Build it with:
+
+```bash
+make viewer-build
+```
+
+Export graph JSON from the backend, then run:
+
+```bash
+make viewer-run GRAPH=path/to/instarl-graph.json
+```
+
+Controls:
+
+- Drag to pan.
+- Mouse wheel to zoom.
+- Space pauses/resumes the layout simulation.
+- Use the in-window layout controls to tune damping, repulsion, spring strength, cluster gravity, or reset node positions.
+- `/` focuses native viewer search; `N` / `Shift+N` cycle username matches.
+- The search panel highlights the selected result in yellow and its 1-hop neighbors in cyan.
+- Zoom in to render username labels; focused search/path labels appear earlier than general labels.
+- The shortest-path controls find an undirected BFS path between two usernames and highlight that path in magenta.
+- R reloads the current JSON file from disk.
+- I prompts for another JSON path in the terminal.
+- Drag and drop a JSON file onto the viewer window to import it.
+- Escape exits.
+
+Current native viewer behavior:
+
+- Loads InstaRL JSON exports with `nodes` and `edges` arrays.
+- Uses compact integer node indices internally.
+- Colors nodes by label-propagation clusters.
+- Uses grid-approximated repulsion, weighted parent-child spring attraction, cluster gravity, center gravity, velocity inertia, stronger damping, and cooling so layouts settle instead of jittering endlessly.
+- Renders mutual edges in green to match the web viewer semantics.
+- Supports native search, selected-node neighborhood focus, and undirected shortest-path highlighting.
+- Avoids rendering all labels, which keeps large 10k+ node / 15k+ edge graphs usable.
 
 ## API highlights
 
@@ -309,6 +360,7 @@ The project is intended to keep sensitive and generated local files out of Git. 
 - Logs and PID files: `*.log`, `.pids/`
 - Python caches and virtual environments
 - Node dependencies and build output
+- Native viewer build output: `viewer/build/`
 - Playwright reports/artifacts
 
 Before pushing public changes, still run:

@@ -152,6 +152,117 @@ async def test_extension_scan_ingests_only_explicit_following_edges(app_and_db):
 
 
 @pytest.mark.asyncio
+async def test_extension_ingest_persists_profile_counts(app_and_db):
+    app, db = app_and_db
+    async with _client(app) as client:
+        created = await client.post("/extension/scans", json={"target": "Alice", "depth": 2})
+        assert created.status_code == 202
+        scan_id = created.json()["scan_id"]
+
+        ingested = await client.post(
+            f"/extension/scans/{scan_id}/accounts",
+            json={
+                "source_username": "Alice",
+                "depth": 2,
+                "source_instagram_id": "1",
+                "source_follower_count": 1234,
+                "source_following_count": 321,
+                "following": [
+                    {
+                        "username": "Bob",
+                        "instagram_id": "2",
+                        "follower_count": 456,
+                        "following_count": 78,
+                    }
+                ],
+                "pending": [{"username": "bob", "remaining_depth": 1, "follower_count": 456, "following_count": 78}],
+            },
+        )
+        assert ingested.status_code == 200
+
+    alice = db.get_user("alice")
+    bob = db.get_user("bob")
+    assert alice is not None
+    assert alice.instagram_id == "1"
+    assert alice.follower_count == 1234
+    assert alice.following_count == 321
+    assert bob is not None
+    assert bob.instagram_id == "2"
+    assert bob.follower_count == 456
+    assert bob.following_count == 78
+
+
+@pytest.mark.asyncio
+async def test_extension_followers_ingest_records_reverse_follows_edges(app_and_db):
+    app, _ = app_and_db
+    async with _client(app) as client:
+        created = await client.post("/extension/scans", json={"target": "Alice", "depth": 1})
+        assert created.status_code == 202
+        scan_id = created.json()["scan_id"]
+
+        ingested = await client.post(
+            f"/extension/scans/{scan_id}/accounts",
+            json={
+                "source_username": "Alice",
+                "depth": 1,
+                "mode": "followers",
+                "following": [
+                    {"username": "Bob", "instagram_id": "2"},
+                    {"username": "Carol", "instagram_id": "3"},
+                ],
+                "pending": [],
+            },
+        )
+        assert ingested.status_code == 200
+        assert ingested.json()["edges"] == 2
+
+        graph = (await client.get("/graph")).json()
+        assert {(edge["source"], edge["target"]) for edge in graph["edges"]} == {
+            ("bob", "alice"),
+            ("carol", "alice"),
+        }
+
+
+@pytest.mark.asyncio
+async def test_extension_followers_and_following_mark_mutual_edges(app_and_db):
+    app, _ = app_and_db
+    async with _client(app) as client:
+        created = await client.post("/extension/scans", json={"target": "Alice", "depth": 1})
+        scan_id = created.json()["scan_id"]
+
+        following = await client.post(
+            f"/extension/scans/{scan_id}/accounts",
+            json={
+                "source_username": "Alice",
+                "depth": 1,
+                "mode": "following",
+                "following": [{"username": "Bob", "instagram_id": "2"}],
+                "pending": [],
+            },
+        )
+        assert following.status_code == 200
+
+        followers = await client.post(
+            f"/extension/scans/{scan_id}/accounts",
+            json={
+                "source_username": "Alice",
+                "depth": 1,
+                "mode": "followers",
+                "following": [{"username": "Bob", "instagram_id": "2"}],
+                "pending": [],
+            },
+        )
+        assert followers.status_code == 200
+
+        graph = (await client.get("/graph")).json()
+        assert {(edge["source"], edge["target"]) for edge in graph["edges"]} == {
+            ("alice", "bob"),
+            ("bob", "alice"),
+        }
+        assert all(edge["mutual"] is True for edge in graph["edges"])
+
+
+@pytest.mark.asyncio
 async def test_extension_depth2_yash_vardhan_rai_creates_over_100_users(app_and_db):
     """Simulate a depth-2 extension capture for yash.vardhan.rai.
 
@@ -241,6 +352,12 @@ async def test_extension_depth2_yash_vardhan_rai_creates_over_100_users(app_and_
         graph = (await client.get("/graph", params={"limit_nodes": 500})).json()
         assert graph["node_count"] > 100
         assert graph["edge_count"] == depth1_count + (depth2_seeds * depth2_per_seed)
+        edge_pairs = {(edge["source"], edge["target"]) for edge in graph["edges"]}
+        assert all((target, user["username"]) in edge_pairs for user in depth1_following)
+        assert not any(
+            source == target and destination.startswith("yv_d2_")
+            for source, destination in edge_pairs
+        )
 
         stats = db.stats()
         assert stats["users"] > 100

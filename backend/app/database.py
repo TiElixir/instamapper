@@ -283,6 +283,39 @@ class Database:
                 db.commit()
                 db.refresh(user)
             return user
+
+    def update_user_counts(
+        self,
+        username: str,
+        *,
+        instagram_id: str | None = None,
+        follower_count: int | None = None,
+        following_count: int | None = None,
+    ) -> User:
+        """Update lightweight profile counts collected by the extension."""
+        canonical = username.strip().lower()
+        with self.session() as db:
+            user = None
+            if instagram_id:
+                user = db.scalar(select(User).where(User.instagram_id == instagram_id))
+            if user is None:
+                user = db.scalar(select(User).where(func.lower(User.username) == canonical))
+            if user is None:
+                user = User(username=canonical, instagram_id=instagram_id)
+                db.add(user)
+                db.flush()
+            user.username = canonical
+            if instagram_id:
+                user.instagram_id = instagram_id
+            if follower_count is not None:
+                user.follower_count = follower_count
+            if following_count is not None:
+                user.following_count = following_count
+            user.last_seen_at = utcnow()
+            db.commit()
+            db.refresh(user)
+            return user
+
     def user_snapshots(self, username: str, limit: int = 100) -> list[UserSnapshot]:
         with self.session() as db:
             user = db.scalar(select(User).where(func.lower(User.username) == username.lower()))

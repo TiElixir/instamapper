@@ -83,16 +83,24 @@ class CookieTestResponse(BaseModel):
 class ExtensionQueueItem(BaseModel):
     username: str
     remaining_depth: int = Field(ge=0, le=3)
+    follower_count: int | None = None
+    following_count: int | None = None
 
 
 class ExtensionRelationship(BaseModel):
     username: str
     instagram_id: str | None = None
+    follower_count: int | None = None
+    following_count: int | None = None
 
 
 class ExtensionAccountIngest(BaseModel):
     source_username: str
     depth: int = Field(ge=0, le=3)
+    mode: str = Field(default="following", pattern="^(following|followers)$")
+    source_instagram_id: str | None = None
+    source_follower_count: int | None = None
+    source_following_count: int | None = None
     following: list[ExtensionRelationship] = Field(default_factory=list, max_length=10_000)
     pending: list[ExtensionQueueItem] = Field(default_factory=list, max_length=10_000)
     error_type: str | None = None

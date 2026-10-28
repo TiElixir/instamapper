@@ -109,6 +109,7 @@ export default function GraphView({ data, searchQuery, onSelectNode }: Props) {
             source: edge.source,
             target: edge.target,
             mutual: edge.mutual,
+            relationship_type: edge.relationship_type,
           },
         })
       }
@@ -143,12 +144,12 @@ export default function GraphView({ data, searchQuery, onSelectNode }: Props) {
           {
             selector: 'edge',
             style: {
-              width: isLarge ? 0.8 : 1.5,
+              width: (ele: any) => (ele.data('mutual') ? (isLarge ? 1.2 : 2.4) : (isLarge ? 0.8 : 1.5)),
               'curve-style': isLarge ? 'haystack' : 'bezier',
               'target-arrow-shape': isLarge ? 'none' : 'triangle',
-              'target-arrow-color': '#6b7280',
+              'target-arrow-color': (ele: any) => (ele.data('mutual') ? '#22c55e' : '#6b7280'),
               'line-color': (ele: any) => (ele.data('mutual') ? '#22c55e' : '#6b7280'),
-              opacity: isLarge ? 0.3 : 0.6,
+              opacity: (ele: any) => (ele.data('mutual') ? (isLarge ? 0.45 : 0.85) : (isLarge ? 0.3 : 0.6)),
             } as any,
           },
           {

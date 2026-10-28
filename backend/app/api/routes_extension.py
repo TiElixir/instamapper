@@ -87,15 +87,38 @@ async def ingest_account(
     if not source:
         raise HTTPException(status_code=422, detail="source_username is required")
     db.ensure_user(source)
+    if (
+        payload.source_instagram_id
+        or payload.source_follower_count is not None
+        or payload.source_following_count is not None
+    ):
+        db.update_user_counts(
+            source,
+            instagram_id=payload.source_instagram_id,
+            follower_count=payload.source_follower_count,
+            following_count=payload.source_following_count,
+        )
 
-    unique_targets: dict[str, str | None] = {}
+    unique_targets = {}
     for relationship in payload.following:
         username = relationship.username.strip().lower()
         if username and username != source:
-            unique_targets.setdefault(username, relationship.instagram_id)
+            unique_targets.setdefault(username, relationship)
+            if relationship.follower_count is not None or relationship.following_count is not None or relationship.instagram_id:
+                db.update_user_counts(
+                    username,
+                    instagram_id=relationship.instagram_id,
+                    follower_count=relationship.follower_count,
+                    following_count=relationship.following_count,
+                )
 
     for username in unique_targets:
-        db.record_edge(source, username, relationship="follows", session_id=scan_id)
+        if payload.mode == "followers":
+            # A user listed in @source's Followers list follows @source.
+            db.record_edge(username, source, relationship="follows", session_id=scan_id)
+        else:
+            # A user listed in @source's Following list is followed by @source.
+            db.record_edge(source, username, relationship="follows", session_id=scan_id)
 
     if payload.error_type and payload.error_message:
         db.add_scan_error(scan_id, source, payload.error_type, payload.error_message, {"depth": payload.depth})

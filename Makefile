@@ -1,4 +1,4 @@
-.PHONY: all dev backend frontend install install-backend install-frontend test test-backend test-frontend build stop clean help
+.PHONY: all dev backend frontend viewer-build viewer-run install install-backend install-frontend test test-backend test-frontend build stop clean help
 
 BACKEND_DIR   := backend
 FRONTEND_DIR  := frontend
@@ -32,6 +32,14 @@ backend:
 
 frontend:
 	cd $(FRONTEND_DIR) && npm run dev
+
+viewer-build:
+	cmake -S viewer -B viewer/build -DCMAKE_BUILD_TYPE=Release
+	cmake --build viewer/build -j
+
+viewer-run: viewer-build
+	@if [ -z "$(GRAPH)" ]; then echo "Usage: make viewer-run GRAPH=path/to/graph.json"; exit 1; fi
+	viewer/build/instarl-viewer "$(GRAPH)"
 
 # --- Stop background servers ----------------------------------------
 stop:
@@ -82,6 +90,8 @@ help:
 	@echo "  make dev          Same as above"
 	@echo "  make backend      Run backend only (foreground)"
 	@echo "  make frontend     Run frontend only (foreground)"
+	@echo "  make viewer-build Build the native C++ graph viewer"
+	@echo "  make viewer-run GRAPH=graph.json  Run the native graph viewer"
 	@echo "  Extension         Load the extension/ directory at chrome://extensions"
 	@echo "  make stop         Stop background servers"
 	@echo "  make install      Install backend + frontend dependencies"

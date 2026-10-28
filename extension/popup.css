@@ -1,4 +1,4 @@
 body { width: 290px; padding: 14px; margin: 0; color: #e2e8f0; background: #0f172a; font: 13px system-ui, sans-serif; }
 h1 { margin: 0 0 8px; font-size: 18px; } .hint { color: #94a3b8; line-height: 1.35; }
-label { display: block; margin: 10px 0; color: #cbd5e1; } input { display:block; width:100%; box-sizing:border-box; margin-top:4px; padding:7px; border:1px solid #334155; border-radius:5px; background:#1e293b; color:#fff; }
+label { display: block; margin: 10px 0; color: #cbd5e1; } input, select { display:block; width:100%; box-sizing:border-box; margin-top:4px; padding:7px; border:1px solid #334155; border-radius:5px; background:#1e293b; color:#fff; }
 button { padding:8px 10px; border:0; border-radius:5px; background:#2563eb; color:#fff; cursor:pointer; } .secondary { background:#334155; } .full { width:100%; margin-top:8px; } .buttons { display:flex; gap:8px; } .buttons button { flex:1; } #status { min-height:18px; color:#93c5fd; }
